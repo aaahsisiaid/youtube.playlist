@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTubeプレイリストプレイヤー</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            max-width: 900px;
+            width: 100%;
+            text-align: center;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .input-section {
+            margin-bottom: 30px;
+        }
+
+        .url-input {
+            width: 100%;
+            padding: 15px 20px;
+            font-size: 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            outline: none;
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.8);
+        }
+
+        .url-input:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 20px rgba(102, 126, 234, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .load-btn {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 16px;
+            border-radius: 12px;
+            cursor: pointer;
+            margin-top: 15px;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .load-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+        }
+
+        .load-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .player-container {
+            margin-top: 30px;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            background: #000;
+        }
+
+        #player {
+            width: 100%;
+            height: 480px;
+            display: none;
+        }
+
+        .error-message {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            display: none;
+            font-weight: 500;
+        }
+
+        .success-message {
+            background: linear-gradient(45deg, #51cf66, #40c057);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            display: none;
+            font-weight: 500;
+        }
+
+        .playlist-info {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+            display: none;
+            text-align: left;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .control-btn {
+            background: rgba(255, 255, 255, 0.9);
+            border: 2px solid #667eea;
+            color: #667eea;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .control-btn:hover {
+            background: #667eea;
+            color: white;
+            transform: translateY(-2px);
+        }
+
+        .debug-info {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.05);
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 12px;
+            text-align: left;
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+            
+            h1 {
+                font-size: 2rem;
+            }
+            
+            #player {
+                height: 250px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎵 YouTubeプレイリストプレイヤー</h1>
+        
+        <div class="input-section">
+            <input 
+                type="text" 
+                id="playlistUrl" 
+                class="url-input"
+                placeholder="YouTubeプレイリストのURLを入力してください..."
+                value="https://youtube.com/playlist?list=OLAK5uy_nlvAoFKZVDvVYf08q_W7ivdpNXoxwzOG8"
+            >
+            <button id="loadPlaylist" class="load-btn">プレイリストを読み込む</button>
+        </div>
+
+        <div class="error-message" id="errorMessage"></div>
+        <div class="success-message" id="successMessage"></div>
+        
+        <div class="playlist-info" id="playlistInfo">
+            <div id="playlistTitle"></div>
+            <div id="playlistDescription"></div>
+        </div>
+
+        <div class="player-container">
+            <div id="player"></div>
+        </div>
+
+        <div class="controls" id="controls" style="display: none;">
+            <button class="control-btn" id="prevBtn">⏮️ 前の動画</button>
+            <button class="control-btn" id="playPauseBtn">⏸️ 一時停止</button>
+            <button class="control-btn" id="nextBtn">⏭️ 次の動画</button>
+        </div>
+
+        <div class="debug-info" id="debugInfo">
+            <strong>デバッグ情報:</strong><br>
+            <div id="debugContent"></div>
+        </div>
+    </div>
+
+    <script>
+        let player;
+        let isPlayerReady = false;
+        let isPlaying = false;
+        let apiLoadPromise = null;
+
+        // デバッグ情報表示
+        function addDebugInfo(message) {
+            const debugDiv = document.getElementById('debugContent');
+            const now = new Date().toLocaleTimeString();
+            debugDiv.innerHTML += `[${now}] ${message}<br>`;
+            document.getElementById('debugInfo').style.display = 'block';
+            console.log(message);
+        }
+
+        // YouTube API読み込み（シングルトンパターン）
+        function loadYouTubeAPI() {
+            if (apiLoadPromise) {
+                addDebugInfo('既存のAPI読み込みプロミスを返却');
+                return apiLoadPromise;
+            }
+
+            addDebugInfo('YouTube API読み込み開始');
+            
+            if (window.YT && window.YT.Player) {
+                addDebugInfo('YouTube API既に読み込み済み');
+                return Promise.resolve();
+            }
+
+            apiLoadPromise = new Promise((resolve, reject) => {
+                let timeoutId;
+                let scriptLoaded = false;
+
+                // グローバルコールバック設定
+                window.onYouTubeIframeAPIReady = function() {
+                    if (scriptLoaded) return; // 重複実行防止
+                    scriptLoaded = true;
+                    
+                    addDebugInfo('YouTube API読み込み完了');
+                    clearTimeout(timeoutId);
+                    resolve();
+                };
+
+                // APIスクリプト読み込み
+                const tag = document.createElement('script');
+                tag.src = 'https://www.youtube.com/iframe_api';
+                tag.async = true;
+                tag.defer = true;
+                
+                tag.onload = () => {
+                    addDebugInfo('スクリプトファイル読み込み完了');
+                };
+                
+                tag.onerror = (error) => {
+                    if (scriptLoaded) return;
+                    scriptLoaded = true;
+                    
+                    addDebugInfo('YouTube API読み込みエラー: ネットワークエラー');
+                    clearTimeout(timeoutId);
+                    reject(new Error('YouTube APIスクリプトの読み込みに失敗しました'));
+                };
+                
+                // 既存のスクリプトタグがある場合は削除
+                const existingScript = document.querySelector('script[src*="youtube.com/iframe_api"]');
+                if (existingScript) {
+                    existingScript.remove();
+                    addDebugInfo('既存のYouTube APIスクリプトを削除');
+                }
+                
+                document.head.appendChild(tag);
+                addDebugInfo('YouTube APIスクリプトタグを追加');
+
+                // タイムアウト設定（15秒）
+                timeoutId = setTimeout(() => {
+                    if (scriptLoaded) return;
+                    scriptLoaded = true;
+                    
+                    addDebugInfo('YouTube API読み込みタイムアウト (15秒)');
+                    reject(new Error('YouTube APIの読み込みがタイムアウトしました。ネットワーク接続を確認してください。'));
+                }, 15000);
+            });
+
+            return apiLoadPromise;
+        }
+
+        // プレイリストID抽出
+        function extractPlaylistId(url) {
+            const patterns = [
+                /[?&]list=([a-zA-Z0-9_-]+)/,
+                /\/playlist\?list=([a-zA-Z0-9_-]+)/,
+                /youtube\.com.*[?&]list=([a-zA-Z0-9_-]+)/,
+                /youtu\.be.*[?&]list=([a-zA-Z0-9_-]+)/
+            ];
+            
+            for (const pattern of patterns) {
+                const match = url.match(pattern);
+                if (match && match[1]) {
+                    addDebugInfo(`プレイリストID抽出成功: ${match[1]}`);
+                    return match[1];
+                }
+            }
+            addDebugInfo('プレイリストID抽出失敗');
+            return null;
+        }
+
+        // エラー表示
+        function showError(message) {
+            document.getElementById('errorMessage').textContent = message;
+            document.getElementById('errorMessage').style.display = 'block';
+            document.getElementById('successMessage').style.display = 'none';
+            addDebugInfo(`エラー: ${message}`);
+        }
+
+        // 成功メッセージ表示
+        function showSuccess(message) {
+            document.getElementById('successMessage').textContent = message;
+            document.getElementById('successMessage').style.display = 'block';
+            document.getElementById('errorMessage').style.display = 'none';
+            addDebugInfo(`成功: ${message}`);
+        }
+
+        // プレイヤー作成
+        function createPlayer(playlistId) {
+            addDebugInfo(`プレイヤー作成開始: ${playlistId}`);
+            
+            // 既存プレイヤーのクリーンアップ
+            if (player && typeof player.destroy === 'function') {
+                try {
+                    addDebugInfo('既存プレイヤーを破棄');
+                    player.destroy();
+                } catch (e) {
+                    addDebugInfo(`プレイヤー破棄エラー: ${e.message}`);
+                }
+            }
+
+            // プレイヤーコンテナの準備
+            const playerElement = document.getElementById('player');
+            playerElement.innerHTML = '';
+
+            try {
+                player = new YT.Player('player', {
+                    height: '480',
+                    width: '100%',
+                    playerVars: {
+                        listType: 'playlist',
+                        list: playlistId,
+                        autoplay: 0, // 自動再生を無効に
+                        controls: 1,
+                        modestbranding: 1,
+                        rel: 0,
+                        fs: 1,
+                        cc_load_policy: 0,
+                        iv_load_policy: 3,
+                        origin: window.location.origin
+                    },
+                    events: {
+                        'onReady': onPlayerReady,
+                        'onStateChange': onPlayerStateChange,
+                        'onError': onPlayerError
+                    }
+                });
+                addDebugInfo('プレイヤー作成完了');
+            } catch (error) {
+                addDebugInfo(`プレイヤー作成エラー: ${error.message}`);
+                showError(`プレイヤー作成エラー: ${error.message}`);
+            }
+        }
+
+        // プレイヤー準備完了
+        function onPlayerReady(event) {
+            addDebugInfo('プレイヤー準備完了');
+            isPlayerReady = true;
+            document.getElementById('player').style.display = 'block';
+            document.getElementById('controls').style.display = 'flex';
+            document.getElementById('playlistInfo').style.display = 'block';
+            
+            try {
+                // プレイリスト情報の取得を試行
+                setTimeout(() => {
+                    try {
+                        const videoData = player.getVideoData();
+                        if (videoData && videoData.title) {
+                            document.getElementById('playlistTitle').textContent = videoData.title;
+                            document.getElementById('playlistDescription').textContent = 
+                                `動画ID: ${videoData.video_id || 'unknown'}`;
+                        } else {
+                            document.getElementById('playlistTitle').textContent = 'プレイリスト再生準備完了';
+                            document.getElementById('playlistDescription').textContent = '再生ボタンを押して開始してください';
+                        }
+                    } catch (error) {
+                        addDebugInfo(`動画データ取得エラー: ${error.message}`);
+                        document.getElementById('playlistTitle').textContent = 'プレイリスト読み込み完了';
+                        document.getElementById('playlistDescription').textContent = '動画情報を取得中...';
+                    }
+                }, 1000);
+                
+                showSuccess('プレイリストが正常に読み込まれました！');
+            } catch (error) {
+                addDebugInfo(`プレイヤー準備完了処理エラー: ${error.message}`);
+                showSuccess('プレイリストが読み込まれました！');
+            }
+        }
+
+        // プレイヤー状態変更
+        function onPlayerStateChange(event) {
+            const states = {
+                '-1': 'UNSTARTED',
+                '0': 'ENDED',
+                '1': 'PLAYING',
+                '2': 'PAUSED',
+                '3': 'BUFFERING',
+                '5': 'CUED'
+            };
+            
+            const stateName = states[event.data] || 'UNKNOWN';
+            addDebugInfo(`プレイヤー状態変更: ${stateName} (${event.data})`);
+            
+            const playPauseBtn = document.getElementById('playPauseBtn');
+            
+            if (event.data === YT.PlayerState.PLAYING) {
+                isPlaying = true;
+                playPauseBtn.textContent = '⏸️ 一時停止';
+                
+                try {
+                    const videoData = player.getVideoData();
+                    if (videoData && videoData.title) {
+                        document.getElementById('playlistTitle').textContent = videoData.title;
+                        document.getElementById('playlistDescription').textContent = 
+                            `動画ID: ${videoData.video_id || 'unknown'}`;
+                    }
+                } catch (error) {
+                    addDebugInfo(`動画データ更新エラー: ${error.message}`);
+                }
+            } else if (event.data === YT.PlayerState.PAUSED) {
+                isPlaying = false;
+                playPauseBtn.textContent = '▶️ 再生';
+            } else if (event.data === YT.PlayerState.ENDED) {
+                isPlaying = false;
+                playPauseBtn.textContent = '▶️ 再生';
+            }
+        }
+
+        // プレイヤーエラー
+        function onPlayerError(event) {
+            const errors = {
+                2: '無効なパラメータです',
+                5: 'HTML5プレイヤーエラーが発生しました',
+                100: '動画が見つかりません（削除済みまたは非公開）',
+                101: 'この動画は埋め込み再生が許可されていません',
+                150: 'この動画は埋め込み再生が許可されていません'
+            };
+            
+            const errorMsg = errors[event.data] || `不明なエラーが発生しました (エラーコード: ${event.data})`;
+            addDebugInfo(`プレイヤーエラー: ${errorMsg}`);
+            showError(`プレイヤーエラー: ${errorMsg}`);
+        }
+
+        // メイン処理
+        async function loadPlaylist() {
+            const url = document.getElementById('playlistUrl').value.trim();
+            const button = document.getElementById('loadPlaylist');
+            
+            if (!url) {
+                showError('URLを入力してください');
+                return;
+            }
+
+            // URLの形式チェック
+            if (!url.includes('youtube.com') && !url.includes('youtu.be')) {
+                showError('YouTubeのURLを入力してください');
+                return;
+            }
+
+            button.disabled = true;
+            button.textContent = '読み込み中...';
+
+            try {
+                addDebugInfo('プレイリスト読み込み開始');
+                
+                // YouTube API読み込み
+                addDebugInfo('YouTube API読み込み待機中...');
+                await loadYouTubeAPI();
+                addDebugInfo('YouTube API読み込み完了');
+                
+                // 少し待機（APIの初期化完了を確認）
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                // プレイリストID抽出
+                const playlistId = extractPlaylistId(url);
+                if (!playlistId) {
+                    throw new Error('有効なプレイリストURLではありません。プレイリストのURLを確認してください。');
+                }
+
+                // プレイヤー作成
+                createPlayer(playlistId);
+                
+            } catch (error) {
+                addDebugInfo(`メイン処理エラー: ${error.message}`);
+                showError(error.message);
+            } finally {
+                button.disabled = false;
+                button.textContent = 'プレイリストを読み込む';
+            }
+        }
+
+        // イベントリスナー
+        document.getElementById('loadPlaylist').addEventListener('click', loadPlaylist);
+        
+        document.getElementById('playlistUrl').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                loadPlaylist();
+            }
+        });
+
+        // コントロールボタン
+        document.getElementById('prevBtn').addEventListener('click', () => {
+            if (player && typeof player.previousVideo === 'function') {
+                addDebugInfo('前の動画へ');
+                player.previousVideo();
+            } else {
+                addDebugInfo('前の動画機能が利用できません');
+            }
+        });
+
+        document.getElementById('nextBtn').addEventListener('click', () => {
+            if (player && typeof player.nextVideo === 'function') {
+                addDebugInfo('次の動画へ');
+                player.nextVideo();
+            } else {
+                addDebugInfo('次の動画機能が利用できません');
+            }
+        });
+
+        document.getElementById('playPauseBtn').addEventListener('click', () => {
+            if (player) {
+                if (isPlaying) {
+                    addDebugInfo('動画を一時停止');
+                    player.pauseVideo();
+                } else {
+                    addDebugInfo('動画を再生');
+                    player.playVideo();
+                }
+            } else {
+                addDebugInfo('プレイヤーが初期化されていません');
+            }
+        });
+
+        // 初期化
+        addDebugInfo('ページ読み込み完了');
+    </script>
+</body>
+</html>
