@@ -88,6 +88,42 @@
             cursor: not-allowed;
         }
 
+        .history-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.6);
+            border-radius: 12px;
+            display: none;
+        }
+
+        .history-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .history-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .history-item {
+            background: rgba(102, 126, 234, 0.1);
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.9rem;
+            border: 1px solid transparent;
+        }
+
+        .history-item:hover {
+            background: rgba(102, 126, 234, 0.2);
+            border-color: #667eea;
+        }
+
         .main-content {
             display: grid;
             grid-template-columns: 1fr 350px;
@@ -119,23 +155,49 @@
             justify-content: center;
             gap: 15px;
             flex-wrap: wrap;
+            margin-bottom: 15px;
         }
 
         .control-btn {
             background: rgba(255, 255, 255, 0.9);
             border: 2px solid #667eea;
             color: #667eea;
-            padding: 10px 20px;
-            border-radius: 8px;
+            padding: 12px 16px;
+            border-radius: 50px;
             cursor: pointer;
             transition: all 0.3s ease;
             font-weight: 500;
+            font-size: 1.2rem;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .control-btn:hover {
             background: #667eea;
             color: white;
-            transform: translateY(-2px);
+            transform: translateY(-2px) scale(1.05);
+        }
+
+        .time-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 10px;
+        }
+
+        .time-display {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 0.9rem;
+            color: #333;
+            min-width: 100px;
+            text-align: center;
         }
 
         .playlist-section {
@@ -306,6 +368,11 @@
     <div class="container">
         <h1>🎵 YouTubeプレイリストプレイヤー</h1>
         
+        <div class="history-section" id="historySection">
+            <div class="history-title">📋 最近のプレイリスト</div>
+            <div class="history-list" id="historyList"></div>
+        </div>
+        
         <div class="input-section">
             <input 
                 type="text" 
@@ -328,10 +395,15 @@
                 </div>
                 
                 <div class="controls" id="controls">
-                    <button class="control-btn" id="prevBtn">⏮️ 前の動画</button>
-                    <button class="control-btn" id="playPauseBtn">▶️ 再生</button>
-                    <button class="control-btn" id="nextBtn">⏭️ 次の動画</button>
-                    <button class="control-btn" id="shuffleBtn">🔀 シャッフル</button>
+                    <button class="control-btn" id="prevBtn" title="前の動画">⏮️</button>
+                    <button class="control-btn" id="playPauseBtn" title="再生/一時停止">▶️</button>
+                    <button class="control-btn" id="nextBtn" title="次の動画">⏭️</button>
+                    <button class="control-btn" id="stopBtn" title="停止">⏹️</button>
+                    <button class="control-btn" id="shuffleBtn" title="シャッフル">🔀</button>
+                </div>
+                
+                <div class="time-control">
+                    <div class="time-display" id="timeDisplay">00:00 / 00:00</div>
                 </div>
             </div>
 
@@ -359,6 +431,82 @@
         let currentPlaylistId = null;
         let playlistVideos = [];
         let currentVideoIndex = 0;
+        let timeUpdateInterval = null;
+        let playlistHistory = [];
+
+        // 履歴をローカルストレージから読み込み（代替手段として変数に保存）
+        function loadHistory() {
+            // 実際の実装では localStorage を使用するが、Claude環境では変数を使用
+            return playlistHistory;
+        }
+
+        // 履歴を保存
+        function saveHistory() {
+            // 実際の実装では localStorage に保存するが、Claude環境では変数に保存
+            // localStorage.setItem('playlistHistory', JSON.stringify(playlistHistory));
+        }
+
+        // 履歴に追加
+        function addToHistory(playlistData) {
+            const existing = playlistHistory.findIndex(item => item.id === playlistData.id);
+            if (existing !== -1) {
+                playlistHistory.splice(existing, 1);
+            }
+            
+            playlistHistory.unshift(playlistData);
+            playlistHistory = playlistHistory.slice(0, 5); // 最大5件まで保持
+            saveHistory();
+            displayHistory();
+        }
+
+        // 履歴表示
+        function displayHistory() {
+            const historyList = document.getElementById('historyList');
+            const historySection = document.getElementById('historySection');
+            
+            if (playlistHistory.length === 0) {
+                historySection.style.display = 'none';
+                return;
+            }
+            
+            historySection.style.display = 'block';
+            historyList.innerHTML = '';
+            
+            playlistHistory.forEach(item => {
+                const historyItem = document.createElement('div');
+                historyItem.className = 'history-item';
+                historyItem.textContent = item.title;
+                historyItem.title = `${item.title} (${item.videoCount}動画)`;
+                historyItem.addEventListener('click', () => {
+                    document.getElementById('playlistUrl').value = item.url;
+                    loadPlaylist();
+                });
+                historyList.appendChild(historyItem);
+            });
+        }
+
+        // 時間表示更新
+        function updateTimeDisplay() {
+            if (!player || !isPlayerReady) return;
+            
+            try {
+                const currentTime = player.getCurrentTime();
+                const duration = player.getDuration();
+                
+                const formatTime = (seconds) => {
+                    const mins = Math.floor(seconds / 60);
+                    const secs = Math.floor(seconds % 60);
+                    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                };
+                
+                const currentFormatted = formatTime(currentTime);
+                const durationFormatted = formatTime(duration);
+                
+                document.getElementById('timeDisplay').textContent = `${currentFormatted} / ${durationFormatted}`;
+            } catch (error) {
+                // エラーは無視
+            }
+        }
 
         // デバッグ情報表示
         function addDebugInfo(message) {
@@ -369,50 +517,33 @@
             console.log(message);
         }
 
-        // YouTube API読み込み（古いバージョン対応）
+        // YouTube API読み込み
         function loadYouTubeAPI() {
-            addDebugInfo('YouTube API読み込み開始（古いバージョン対応）');
+            addDebugInfo('YouTube API読み込み開始');
             
             return new Promise((resolve, reject) => {
-                // 既にAPIが読み込まれている場合
                 if (window.YT && window.YT.Player) {
                     addDebugInfo('YouTube API既に読み込み済み');
                     resolve();
                     return;
                 }
 
-                // グローバルコールバック関数を設定
-                window.onYouTubePlayerAPIReady = function() {
-                    addDebugInfo('YouTube API読み込み完了（古いバージョン）');
+                window.onYouTubeIframeAPIReady = function() {
+                    addDebugInfo('YouTube API読み込み完了');
                     resolve();
                 };
 
-                // 古いバージョンのAPI読み込み
                 try {
                     const script = document.createElement('script');
-                    script.src = 'https://www.youtube.com/player_api';
-                    script.onerror = () => {
-                        addDebugInfo('古いAPI読み込み失敗、新しいAPIを試行');
-                        // フォールバック: 新しいAPI
-                        window.onYouTubeIframeAPIReady = function() {
-                            addDebugInfo('新しいYouTube API読み込み完了');
-                            resolve();
-                        };
-                        
-                        const newScript = document.createElement('script');
-                        newScript.src = 'https://www.youtube.com/iframe_api';
-                        newScript.onerror = () => reject(new Error('YouTube API読み込み失敗'));
-                        document.head.appendChild(newScript);
-                    };
-                    
+                    script.src = 'https://www.youtube.com/iframe_api';
+                    script.onerror = () => reject(new Error('YouTube API読み込み失敗'));
                     document.head.appendChild(script);
-                    addDebugInfo('古いYouTube APIスクリプト追加');
+                    addDebugInfo('YouTube APIスクリプト追加');
                 } catch (error) {
                     addDebugInfo(`スクリプト追加エラー: ${error.message}`);
                     reject(error);
                 }
 
-                // タイムアウト設定
                 setTimeout(() => {
                     if (!window.YT || !window.YT.Player) {
                         reject(new Error('YouTube API読み込みタイムアウト'));
@@ -438,26 +569,85 @@
             return null;
         }
 
-        // YouTube Data APIでプレイリスト情報を取得（簡易版）
+        // 実際のYouTube動画情報を取得（プレイヤーから）
+        async function getVideoInfoFromPlayer(playlistId) {
+            return new Promise((resolve) => {
+                const tempPlayer = new YT.Player('temp-player', {
+                    height: '1',
+                    width: '1',
+                    playerVars: {
+                        listType: 'playlist',
+                        list: playlistId,
+                        autoplay: 0,
+                        controls: 0
+                    },
+                    events: {
+                        'onReady': function(event) {
+                            try {
+                                const playlist = event.target.getPlaylist();
+                                const videos = [];
+                                
+                                if (playlist && playlist.length > 0) {
+                                    playlist.forEach((videoId, index) => {
+                                        videos.push({
+                                            id: videoId,
+                                            title: `動画 ${index + 1}`, // 基本的なタイトル
+                                            thumbnail: `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`,
+                                            duration: '不明',
+                                            index: index
+                                        });
+                                    });
+                                }
+                                
+                                // 一時プレイヤーを削除
+                                event.target.destroy();
+                                document.getElementById('temp-player')?.remove();
+                                
+                                resolve({
+                                    title: 'YouTube プレイリスト',
+                                    videos: videos
+                                });
+                            } catch (error) {
+                                addDebugInfo(`動画情報取得エラー: ${error.message}`);
+                                resolve({
+                                    title: 'YouTube プレイリスト',
+                                    videos: []
+                                });
+                            }
+                        },
+                        'onError': function() {
+                            resolve({
+                                title: 'YouTube プレイリスト',
+                                videos: []
+                            });
+                        }
+                    }
+                });
+            });
+        }
+
+        // プレイリスト情報取得
         async function getPlaylistInfo(playlistId) {
             addDebugInfo('プレイリスト情報取得開始');
             
-            // 実際のAPIキーが必要ですが、デモ用にダミーデータを生成
-            const dummyVideos = [];
-            for (let i = 0; i < 10; i++) {
-                dummyVideos.push({
-                    id: `video_${i}`,
-                    title: `プレイリスト動画 ${i + 1}`,
-                    thumbnail: `https://i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg`,
-                    duration: '3:45',
-                    index: i
-                });
-            }
+            // 一時的な非表示プレイヤー要素を作成
+            const tempDiv = document.createElement('div');
+            tempDiv.id = 'temp-player';
+            tempDiv.style.position = 'absolute';
+            tempDiv.style.left = '-9999px';
+            document.body.appendChild(tempDiv);
             
-            return {
-                title: 'サンプルプレイリスト',
-                videos: dummyVideos
-            };
+            try {
+                const result = await getVideoInfoFromPlayer(playlistId);
+                return result;
+            } catch (error) {
+                addDebugInfo(`プレイリスト情報取得失敗: ${error.message}`);
+                // フォールバック
+                return {
+                    title: 'YouTube プレイリスト',
+                    videos: []
+                };
+            }
         }
 
         // エラー表示
@@ -502,9 +692,34 @@
                 videoList.appendChild(videoItem);
             });
             
-            // 最初の動画をアクティブに
             if (videos.length > 0) {
                 videoList.children[0].classList.add('active');
+            }
+        }
+
+        // 動画タイトル更新（プレイヤーから取得）
+        function updateVideoTitles() {
+            if (!player || !isPlayerReady) return;
+            
+            try {
+                const videoData = player.getVideoData();
+                if (videoData && videoData.title) {
+                    const currentIndex = player.getPlaylistIndex();
+                    if (currentIndex >= 0 && currentIndex < playlistVideos.length) {
+                        playlistVideos[currentIndex].title = videoData.title;
+                        
+                        // リスト表示を更新
+                        const videoItem = document.querySelector(`[data-index="${currentIndex}"]`);
+                        if (videoItem) {
+                            const titleElement = videoItem.querySelector('.video-title');
+                            if (titleElement) {
+                                titleElement.textContent = videoData.title;
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                addDebugInfo(`動画タイトル更新エラー: ${error.message}`);
             }
         }
 
@@ -514,12 +729,10 @@
             
             currentVideoIndex = index;
             
-            // リストのアクティブ状態更新
             document.querySelectorAll('.video-item').forEach((item, i) => {
                 item.classList.toggle('active', i === index);
             });
             
-            // プレイヤーで動画再生
             try {
                 player.playVideoAt(index);
                 addDebugInfo(`動画 ${index + 1} を再生`);
@@ -573,7 +786,13 @@
             document.getElementById('player').style.display = 'block';
             document.getElementById('mainContent').style.display = 'grid';
             
+            // 時間表示更新開始
+            timeUpdateInterval = setInterval(updateTimeDisplay, 1000);
+            
             showSuccess('プレイリストが正常に読み込まれました！');
+            
+            // 動画タイトルを更新
+            setTimeout(updateVideoTitles, 1000);
         }
 
         // プレイヤー状態変更
@@ -594,9 +813,8 @@
             
             if (event.data === YT.PlayerState.PLAYING) {
                 isPlaying = true;
-                playPauseBtn.textContent = '⏸️ 一時停止';
+                playPauseBtn.textContent = '⏸️';
                 
-                // 現在の動画インデックスを取得してリスト更新
                 try {
                     const currentIndex = player.getPlaylistIndex();
                     if (currentIndex !== -1 && currentIndex !== currentVideoIndex) {
@@ -604,13 +822,16 @@
                         document.querySelectorAll('.video-item').forEach((item, i) => {
                             item.classList.toggle('active', i === currentIndex);
                         });
+                        
+                        // 動画タイトルを更新
+                        setTimeout(updateVideoTitles, 1000);
                     }
                 } catch (error) {
                     addDebugInfo(`プレイリストインデックス取得エラー: ${error.message}`);
                 }
             } else if (event.data === YT.PlayerState.PAUSED) {
                 isPlaying = false;
-                playPauseBtn.textContent = '▶️ 再生';
+                playPauseBtn.textContent = '▶️';
             }
         }
 
@@ -643,10 +864,8 @@
             button.textContent = '読み込み中...';
 
             try {
-                // YouTube API読み込み
                 await loadYouTubeAPI();
                 
-                // プレイリストID抽出
                 const playlistId = extractPlaylistId(url);
                 if (!playlistId) {
                     throw new Error('プレイリストIDが見つかりません');
@@ -654,69 +873,7 @@
 
                 currentPlaylistId = playlistId;
 
-                // プレイリスト情報取得
                 const playlistInfo = await getPlaylistInfo(playlistId);
                 playlistVideos = playlistInfo.videos;
                 
-                // UI更新
-                document.getElementById('playlistTitle').textContent = playlistInfo.title;
-                document.getElementById('playlistCount').textContent = `${playlistInfo.videos.length} 動画`;
-                
-                // 動画リスト表示
-                displayVideoList(playlistInfo.videos);
-                
-                // プレイヤー作成
-                createPlayer(playlistId);
-                
-            } catch (error) {
-                showError(error.message);
-            } finally {
-                button.disabled = false;
-                button.textContent = 'プレイリストを読み込む';
-            }
-        }
-
-        // イベントリスナー
-        document.getElementById('loadPlaylist').addEventListener('click', loadPlaylist);
-        
-        document.getElementById('playlistUrl').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                loadPlaylist();
-            }
-        });
-
-        // コントロールボタン
-        document.getElementById('prevBtn').addEventListener('click', () => {
-            if (player && player.previousVideo) {
-                player.previousVideo();
-            }
-        });
-
-        document.getElementById('nextBtn').addEventListener('click', () => {
-            if (player && player.nextVideo) {
-                player.nextVideo();
-            }
-        });
-
-        document.getElementById('playPauseBtn').addEventListener('click', () => {
-            if (player) {
-                if (isPlaying) {
-                    player.pauseVideo();
-                } else {
-                    player.playVideo();
-                }
-            }
-        });
-
-        document.getElementById('shuffleBtn').addEventListener('click', () => {
-            if (player && player.setShuffle) {
-                player.setShuffle(true);
-                addDebugInfo('シャッフルモード有効');
-            }
-        });
-
-        // 初期化
-        addDebugInfo('ページ読み込み完了');
-    </script>
-</body>
-</html>
+                document.getElementById('playlist
